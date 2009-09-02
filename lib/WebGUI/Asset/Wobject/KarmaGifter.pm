@@ -115,8 +115,8 @@ sub getTemplateVars {
     my $var = $self->get;
     my $userList = $self->session->db->buildArrayRefOfHashRefs("SELECT `userId`, `username`, `karma` FROM `users` WHERE `karma` > 0 AND `userId` != '1' ORDER BY `karma` DESC LIMIT ?", [$self->get('topUserLimit')]);
     for my $user (@$userList) {
-        my $user = WebGUI::User->new($self->session, $user->{userId});
-        $user->{profile_link} = $user->getProfileUrl($self->getUrl());
+        my $u = WebGUI::User->new($self->session, $user->{userId});
+        $user->{profile_link} = $u->getProfileUrl($self->getUrl());
     }
     $var->{users_loop} = $userList;
     if ($self->session->user->isInGroup($self->get('allowGiftFrom'))) {
