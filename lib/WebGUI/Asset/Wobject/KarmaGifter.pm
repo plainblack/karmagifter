@@ -12,70 +12,44 @@ $VERSION = "1.0.0";
 # http://www.plainblack.com                     info@plainblack.com
 #-------------------------------------------------------------------
 
-use strict;
-use warnings;
-use Tie::IxHash;
+use Moose;
+use WebGUI::Asset::Definition;
 use WebGUI::International;
-use WebGUI::Utility;
-use WebGUI::Asset::Wobject;
 use WebGUI::User;
-our @ISA = qw(WebGUI::Asset::Wobject);
 
-#-------------------------------------------------------------------
+define assetName           => "Karma Gifter";
+define icon                => 'karmagifter.png';
+define tableName           => 'KarmaGifter';
 
-=head2 definition ( )
+property templateId => (
+    fieldType       => "template",
+    tab             => "display",
+    namespace       => "KarmaGifter",
+    hoverHelp       => "Karma Gifter Template",
+    label           => "Karma Gifter Template",
+    defaultValue    => 'nW3McOz4DztZir2oBNXBAA',
+);
 
-defines wobject properties for New Wobject instances.  You absolutely need 
-this method in your new Wobjects.  If you choose to "autoGenerateForms", the
-getEditForm method is unnecessary/redundant/useless.  
+property topUserLimit => (
+    fieldType       => 'integer',
+    tab             => 'display',
+    label           => 'Top Users Count',
+    defaultValue    => 100,
+);
 
-=cut
+property allowGiftFrom => (
+    fieldType       => 'group',
+    tab             => 'security',
+    label           => 'Group to allow sending karma',
+    defaultValue    => '2', # Registered Users
+);
 
-sub definition {
-    my $class = shift;
-    my $session = shift;
-    my $definition = shift;
-#my $i18n = WebGUI::International->new($session, 'Asset_NewWobject');
-    my %properties;
-    tie %properties, 'Tie::IxHash';
-    %properties = (
-        templateId => {
-            fieldType       => "template",
-            tab             => "display",
-            namespace       => "KarmaGifter",
-            hoverHelp       => "Karma Gifter Template",
-            label           => "Karma Gifter Template",
-            defaultValue    => 'nW3McOz4DztZir2oBNXBAA',
-        },
-        topUserLimit => {
-            fieldType       => 'integer',
-            tab             => 'display',
-            label           => 'Top Users Count',
-            defaultValue    => 100,
-        },
-        allowGiftFrom => {
-            fieldType       => 'group',
-            tab             => 'security',
-            label           => 'Group to allow sending karma',
-            defaultValue    => '2', # Registered Users
-        },
-        allowGiftTo => {
-            fieldType       => 'group',
-            tab             => 'security',
-            label           => 'Group to allow receiving karma',
-            defaultValue    => '2', # Registered Users
-        },
-    );
-    push(@{$definition}, {
-        assetName           => "Karma Gifter",
-        icon                => 'karmagifter.png',
-        autoGenerateForms   => 1,
-        tableName           => 'KarmaGifter',
-        className           => __PACKAGE__,
-        properties          => \%properties,
-    });
-    return $class->SUPER::definition($session, $definition);
-}
+property allowGiftTo => (
+    fieldType       => 'group',
+    tab             => 'security',
+    label           => 'Group to allow receiving karma',
+    defaultValue    => '2', # Registered Users
+);
 
 
 #-------------------------------------------------------------------
@@ -86,10 +60,10 @@ See WebGUI::Asset::prepareView() for details.
 
 =cut
 
-sub prepareView {
+override prepareView => sub {
     my $self = shift;
-    $self->SUPER::prepareView();
-    my $template = WebGUI::Asset::Template->new($self->session, $self->get("templateId"));
+    super();
+    my $template = WebGUI::Asset::Template->new($self->session, $self->templateId);
     $template->prepare;
     $self->{_viewTemplate} = $template;
 }
@@ -113,13 +87,13 @@ sub getTemplateVars {
     my $self = shift;
     my $form = $self->session->form;
     my $var = $self->get;
-    my $userList = $self->session->db->buildArrayRefOfHashRefs("SELECT `userId`, `username`, `karma` FROM `users` WHERE `karma` > 0 AND `userId` != '1' ORDER BY `karma` DESC LIMIT ?", [$self->get('topUserLimit')]);
+    my $userList = $self->session->db->buildArrayRefOfHashRefs("SELECT `userId`, `username`, `karma` FROM `users` WHERE `karma` > 0 AND `userId` != '1' ORDER BY `karma` DESC LIMIT ?", [$self->topUserLimit]);
     for my $user (@$userList) {
         my $u = WebGUI::User->new($self->session, $user->{userId});
         $user->{profile_link} = $u->getProfileUrl($self->getUrl());
     }
     $var->{users_loop} = $userList;
-    if ($self->session->user->isInGroup($self->get('allowGiftFrom'))) {
+    if ($self->session->user->isInGroup($self->allowGiftFrom)) {
         if ($self->session->user->karma <= 0) {
             $var->{no_karma} = 1;
         }
@@ -146,7 +120,7 @@ sub www_confirmGift {
     my @errors;
     $var->{errors} = \@errors;
     my $user = $self->session->user;
-    if (!$user->isInGroup($self->get('allowGiftFrom'))) {
+    if (!$user->isInGroup($self->allowGiftFrom)) {
         push @errors, {error => "You aren't allowed to send karma!"};
     }
     else {
@@ -159,7 +133,7 @@ sub www_confirmGift {
         if (!$giftUser) {
             push @errors, {error => "Not a valid username!"};
         }
-        elsif (!$giftUser->isInGroup($self->get('allowGiftTo'))) {
+        elsif (!$giftUser->isInGroup($self->allowGiftTo)) {
             push @errors, {error => sprintf "You aren't allowed to gift karma to %s!", $giftUser->username};
         }
         elsif ($giftUser->userId eq $user->userId) {
@@ -173,7 +147,7 @@ sub www_confirmGift {
         }
     }
     if (@errors) {
-        return $self->processStyle($self->processTemplate($var, $self->get("templateId")));
+        return $self->processStyle($self->processTemplate($var, $self->templateId));
     }
     $var->{karma_gifted} = $transKarma;
     $var->{user_karma_before} = $self->session->user->karma;
@@ -191,7 +165,7 @@ sub www_confirmGift {
     $f->submit(value => 'Confirm');
     $var->{confirm_gift} = $f->print;
 
-    return $self->processStyle($self->processTemplate($var, $self->get("templateId")));
+    return $self->processStyle($self->processTemplate($var, $self->templateId));
 }
 
 sub www_sendGift {
@@ -203,10 +177,10 @@ sub www_sendGift {
     if (!$giftUser) {
         return $self->session->privilege->insufficient;
     }
-    if (!$user->isInGroup($self->get('allowGiftFrom'))) {
+    if (!$user->isInGroup($self->allowGiftFrom)) {
         return $self->session->privilege->insufficient;
     }
-    if (!$giftUser->isInGroup($self->get('allowGiftTo'))) {
+    if (!$giftUser->isInGroup($self->allowGiftTo)) {
         return $self->session->privilege->insufficient;
     }
     if ($karmaTrans <= 0 || $karmaTrans > $user->karma) {
