@@ -13,8 +13,9 @@ $VERSION = "1.0.0";
 #-------------------------------------------------------------------
 
 use Moose;
-use WebGUI::Asset::Definition;
 use WebGUI::International;
+use WebGUI::Definition::Asset;
+extends 'WebGUI::Asset::Wobject';
 use WebGUI::User;
 
 define assetName           => "Karma Gifter";
@@ -66,7 +67,7 @@ override prepareView => sub {
     my $template = WebGUI::Asset::Template->new($self->session, $self->templateId);
     $template->prepare;
     $self->{_viewTemplate} = $template;
-}
+};
 
 #-------------------------------------------------------------------
 
